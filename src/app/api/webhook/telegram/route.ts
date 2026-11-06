@@ -125,7 +125,7 @@ bot.command("start", async (ctx) => {
 		);
 		await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
 	} else {
-		const authLink = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google?chat_id=${chatId}`;
+		const authLink = `${process.env.APP_URL}/api/auth/google?chat_id=${chatId}`;
 		const unregisteredMessage = `
 Selamat datang di <b>Sanora Finance AI Bot</b>, <b>${escapeHtml(firstName)}</b>! 🚀
 
@@ -218,7 +218,7 @@ async function triggerManualSync(ctx: any) {
 		.single();
 
 	if (!user || !user.refresh_token || !user.spreadsheet_id) {
-		const authLink = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google?chat_id=${chatId}`;
+		const authLink = `${process.env.APP_URL}/api/auth/google?chat_id=${chatId}`;
 		return ctx.reply(
 			`⚠️ Harap hubungkan akun Google Anda terlebih dahulu:\n${authLink}`,
 		);
@@ -319,7 +319,7 @@ bot.on("callback_query:data", async (ctx) => {
 				reply_markup: keyboard,
 			});
 		} else {
-			const authLink = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google?chat_id=${chatId}`;
+			const authLink = `${process.env.APP_URL}/api/auth/google?chat_id=${chatId}`;
 			await ctx.editMessageText(
 				`Selamat datang di <b>Sanora Finance AI Bot</b>, <b>${escapeHtml(firstName)}</b>!\n\n💡 <b>Mode Guest (Uji Coba Langsung):</b> Anda dapat langsung mengirim teks, foto, atau file mutasi.\n\n🔗 <a href="${authLink}">Hubungkan Akun Google</a>`,
 				{ parse_mode: "HTML" },
@@ -515,7 +515,7 @@ Receipt <b>No. Ref:</b> ${escapeHtml(parsed.no_referensi || "-")}
 
 			return ctx.reply(successMessage, { parse_mode: "HTML" });
 		} else {
-			const authLink = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google?chat_id=${chatId}`;
+			const authLink = `${process.env.APP_URL}/api/auth/google?chat_id=${chatId}`;
 			const guestMessage = `🔍 <b>Hasil Ekstraksi Transaksi (Mode Guest)</b>
 
 📅 <b>Tanggal:</b> ${escapeHtml(parsed.tanggal)}

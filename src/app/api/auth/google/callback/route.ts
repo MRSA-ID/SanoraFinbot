@@ -138,7 +138,7 @@ Sekarang Anda bisa langsung mengirim pesan transaksi atau foto struk di sini! ðŸ
 		});
 
 		// 5. Redirect User Kembali ke Halaman Web Sukses
-		return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/success`);
+		return NextResponse.redirect(`${process.env.APP_URL}/success`);
 	} catch (error: any) {
 		console.error("OAuth Callback Error:", error);
 		return NextResponse.json({ error: error.message }, { status: 500 });

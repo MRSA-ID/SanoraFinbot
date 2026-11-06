@@ -22,9 +22,13 @@ export default function RootLayout({
 	return (
 		<html lang="id">
 			<head>
-				<meta
+				{/* <meta
 					name="google-site-verification"
 					content="5sQWOsGWXBY7kVV8Z2dd9-SRHW2C1ZlPCsueVzPYwGA"
+				/> */}
+				<meta
+					name="google-site-verification"
+					content="w7D3FzhbguBm00sNfN1fvAiU__peDlutFrvQiTfF_C0"
 				/>
 			</head>
 			<body>{children}</body>

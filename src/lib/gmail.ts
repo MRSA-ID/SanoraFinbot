@@ -135,7 +135,16 @@ export async function syncGmailTransactions(
 
 		const fullEmailContext = `Date Sent (WIB): ${formattedWibDate}\nFrom: ${from}\nSubject: ${subject}\nBody: ${bodyText}`;
 
-		const parsed = await parseTransactionWithGemini(fullEmailContext);
+		// PERBAIKAN DI SINI: Destructure data dan usage dari GeminiResult
+		const { data: parsed, usage } =
+			await parseTransactionWithGemini(fullEmailContext);
+
+		// Catat usage token dari pemindaian Gmail ke Redis jika ada token terpakai
+		if (usage && usage.totalTokens > 0) {
+			const { redis } = await import("@/src/lib/redis");
+			await redis.incrby(`usage:tokens:${chatId}`, usage.totalTokens);
+			await redis.incrby(`usage:tokens:global_total`, usage.totalTokens);
+		}
 
 		if (parsed.is_transaction && formattedWibDate) {
 			parsed.tanggal = formattedWibDate;

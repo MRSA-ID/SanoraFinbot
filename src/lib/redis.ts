@@ -63,3 +63,19 @@ export async function isDuplicateMessage(updateId: number): Promise<boolean> {
 	await redis.set(key, "1", { ex: 3600 });
 	return false;
 }
+
+/**
+ * 5. Session Lock per User Telegram (Masa simpan: 45 Detik)
+ * Mencegah multiple action / request bersamaan dalam 1 chat session.
+ */
+export async function acquireChatLock(chatId: number): Promise<boolean> {
+	const key = `chat_lock:${chatId}`;
+	// nx: set jika belum ada key, ex: 45 detik auto-expire jika crash
+	const setSuccess = await redis.set(key, "locked", { nx: true, ex: 45 });
+	return setSuccess === "OK";
+}
+
+export async function releaseChatLock(chatId: number): Promise<void> {
+	const key = `chat_lock:${chatId}`;
+	await redis.del(key);
+}

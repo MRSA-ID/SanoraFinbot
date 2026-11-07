@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
+import { AppError } from "@/src/bot/helpers/errors";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -115,6 +116,7 @@ async function generateWithTimeout(
 export async function parseTransactionWithGemini(
 	input: string | { inlineData: { mimeType: string; data: string } },
 ): Promise<TransactionData> {
+	// KANDIDAT MODEL TETAP SAMA PERSIS TANPA DIUBAH
 	const candidateModels = [
 		"gemini-3.1-flash-lite",
 		"gemini-3.5-flash-lite",
@@ -163,20 +165,11 @@ export async function parseTransactionWithGemini(
 		}
 	}
 
-	const defaultFallback: TransactionData = {
-		is_transaction: false,
-		is_oot: true,
-		oot_response: "Gagal memproses pesan via Gemini AI.",
-		tanggal: "",
-		merchant: "",
-		nominal: 0,
-		tipe: "pengeluaran",
-		no_referensi: "",
-		kategori: "",
-		sumber_dana: "",
-	};
-
-	if (!responseText) return defaultFallback;
+	if (!responseText) {
+		throw new AppError(
+			"⚠️ Layanan AI sedang sibuk atau gagal merespons. Silakan coba beberapa saat lagi.",
+		);
+	}
 
 	try {
 		const jsonParsed = JSON.parse(responseText);
@@ -184,7 +177,9 @@ export async function parseTransactionWithGemini(
 
 		if (!validatedData.success) {
 			console.warn("Zod Validation Failed:", validatedData.error);
-			return defaultFallback;
+			throw new AppError(
+				"⚠️ Gagal mengurai struktur data dari bukti transaksi ini.",
+			);
 		}
 
 		const data = validatedData.data;
@@ -202,7 +197,10 @@ export async function parseTransactionWithGemini(
 
 		return data;
 	} catch (error) {
+		if (error instanceof AppError) throw error;
 		console.error("Gemini Extraction Error:", error);
-		return defaultFallback;
+		throw new AppError(
+			"⚠️ Terjadi kesalahan saat membaca data dari pesan/gambar ini.",
+		);
 	}
 }

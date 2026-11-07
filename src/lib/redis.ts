@@ -81,13 +81,31 @@ export async function releaseChatLock(chatId: number): Promise<void> {
 }
 
 /**
- * 6. Pencatatan Token Gemini AI per User & Global
+ * 6. Pencatatan Detail Token Gemini AI per User & Global
  */
 export async function trackTokenUsage(
 	chatId: number,
-	tokens: number,
+	usage:
+		| { promptTokens: number; completionTokens: number; totalTokens: number }
+		| number,
 ): Promise<void> {
-	if (!tokens || tokens <= 0) return;
-	await redis.incrby(`usage:tokens:${chatId}`, tokens);
-	await redis.incrby(`usage:tokens:global_total`, tokens);
+	if (typeof usage === "number") {
+		if (usage <= 0) return;
+		await redis.incrby(`usage:tokens:${chatId}:total`, usage);
+		await redis.incrby(`usage:tokens:global_total`, usage);
+		return;
+	}
+
+	if (!usage || usage.totalTokens <= 0) return;
+
+	// Catat per user (Prompt, Completion, Total)
+	await redis.incrby(`usage:tokens:${chatId}:prompt`, usage.promptTokens || 0);
+	await redis.incrby(
+		`usage:tokens:${chatId}:completion`,
+		usage.completionTokens || 0,
+	);
+	await redis.incrby(`usage:tokens:${chatId}:total`, usage.totalTokens || 0);
+
+	// Catat global total
+	await redis.incrby(`usage:tokens:global_total`, usage.totalTokens || 0);
 }

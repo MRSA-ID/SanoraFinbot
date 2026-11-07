@@ -194,21 +194,28 @@ export async function handleAdminUsageCommand(ctx: any) {
 			});
 		}
 
-		const keys = await redis.keys("usage:tokens:*");
-		const userKeys = keys.filter((k) => k !== "usage:tokens:global_total");
+		// Cari key total (format: usage:tokens:{chatId}:total)
+		const keys = await redis.keys("usage:tokens:*:total");
 
 		let reportText = `📊 <b>LAPORAN PENGGUNAAN TOKEN GEMINI (ADMIN)</b>\n\n`;
 		reportText += `🌐 <b>Total Penggunaan Global:</b> ${Number(globalTotal).toLocaleString("id-ID")} Tokens\n`;
 		reportText += `───────────────\n`;
 
-		if (userKeys.length === 0) {
+		if (keys.length === 0) {
 			reportText += `<i>Belum ada data penggunaan token.</i>`;
 		} else {
-			for (const key of userKeys) {
-				const targetChatId = Number(key.replace("usage:tokens:", ""));
-				const tokenCount = (await redis.get(key)) || 0;
-				const userEmail = userEmailMap.get(targetChatId);
+			for (const key of keys) {
+				// Ekstrak targetChatId dari key (usage:tokens:<chatId>:total)
+				const targetChatId = Number(key.split(":")[2]);
 
+				const promptTokens =
+					(await redis.get(`usage:tokens:${targetChatId}:prompt`)) || 0;
+				const completionTokens =
+					(await redis.get(`usage:tokens:${targetChatId}:completion`)) || 0;
+				const totalTokens =
+					(await redis.get(`usage:tokens:${targetChatId}:total`)) || 0;
+
+				const userEmail = userEmailMap.get(targetChatId);
 				const statusBadge = userEmail ? "🟢 Registered" : "⚪ Guest";
 				const identityText = userEmail
 					? `📧 <b>Email:</b> ${userEmail}`
@@ -217,7 +224,10 @@ export async function handleAdminUsageCommand(ctx: any) {
 				reportText += `${statusBadge}\n`;
 				reportText += `${identityText}\n`;
 				reportText += `🆔 <b>Chat ID:</b> <code>${targetChatId}</code>\n`;
-				reportText += `🔢 <b>Total Token:</b> ${Number(tokenCount).toLocaleString("id-ID")} Tokens\n\n`;
+				reportText += `📥 <b>Input (Prompt):</b> ${Number(promptTokens).toLocaleString("id-ID")} Tokens\n`;
+				reportText += `📤 <b>Output (Completion):</b> ${Number(completionTokens).toLocaleString("id-ID")} Tokens\n`;
+				reportText += `💰 <b>Total User:</b> <b>${Number(totalTokens).toLocaleString("id-ID")} Tokens</b>\n`;
+				reportText += `───────────────\n`;
 			}
 		}
 

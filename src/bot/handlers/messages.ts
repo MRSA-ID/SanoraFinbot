@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/src/lib/supabaseAdmin";
-import { isDuplicateMessage, trackTokenUsage } from "@/src/lib/redis"; // Import trackTokenUsage
+import { isDuplicateMessage, trackTokenUsage } from "@/src/lib/redis";
 import { parseTransactionWithGemini, GeminiResult } from "@/src/lib/gemini";
 import { appendTransactionToSheet } from "@/src/lib/sheets";
 import {
@@ -10,6 +10,10 @@ import {
 import { runWithChatAction, withSessionLock } from "../helpers/chatActions";
 import { formatTransactionNotification } from "../helpers/formatters";
 import { handleUserError, AppError } from "../helpers/errors";
+
+// KONSTANTA BATAS UKURAN FILE (UNTUK MENJAGA LATENSI & VERCEL TIMEOUT)
+const MAX_PHOTO_SIZE = 4 * 1024 * 1024; // 4 MB
+const MAX_DOC_SIZE = 3 * 1024 * 1024; // 3 MB
 
 async function fetchWithRetry(
 	url: string,
@@ -58,10 +62,19 @@ export async function handleIncomingMessage(ctx: any) {
 				user.spreadsheet_id
 			);
 
-			// Menggunakan GeminiResult yang mengembalikan { data, usage }
 			let geminiResult: GeminiResult;
 
 			if (ctx.message.photo) {
+				const photos = ctx.message.photo;
+				const largestPhoto = photos[photos.length - 1]; // Resolusi tertinggi
+
+				// Validasi Ukuran Foto Maksimal 4 MB
+				if (largestPhoto.file_size && largestPhoto.file_size > MAX_PHOTO_SIZE) {
+					return ctx.reply(
+						"⚠️ Ukuran foto terlalu besar. Harap kirimkan foto struk di bawah 4 MB.",
+					);
+				}
+
 				geminiResult = await runWithChatAction(
 					ctx,
 					"upload_photo",
@@ -78,11 +91,19 @@ export async function handleIncomingMessage(ctx: any) {
 					},
 				);
 			} else if (ctx.message.document) {
+				const doc = ctx.message.document;
+
+				// Validasi Ukuran Dokumen PDF Maksimal 3 MB
+				if (doc.file_size && doc.file_size > MAX_DOC_SIZE) {
+					return ctx.reply(
+						"⚠️ Ukuran dokumen terlalu besar. Harap unggah file PDF mutasi di bawah 3 MB.",
+					);
+				}
+
 				geminiResult = await runWithChatAction(
 					ctx,
 					"upload_document",
 					async () => {
-						const doc = ctx.message.document;
 						const mimeType = doc.mime_type || "application/pdf";
 						const file = await ctx.getFile();
 						const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
@@ -113,9 +134,9 @@ export async function handleIncomingMessage(ctx: any) {
 			const parsed = geminiResult.data;
 			const usage = geminiResult.usage;
 
-			// CATAT TOKEN KE REDIS (BERLAKU UNTUK GUEST & REGISTERED USER)
+			// CATAT DETAIL TOKEN KE REDIS (BERLAKU UNTUK GUEST & REGISTERED USER)
 			if (usage && usage.totalTokens > 0) {
-				await trackTokenUsage(chatId, usage.totalTokens);
+				await trackTokenUsage(chatId, usage);
 			}
 
 			// PENANGANAN OUT-OF-TOPIC (OOT)

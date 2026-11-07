@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/src/lib/supabaseAdmin";
-import { isDuplicateMessage } from "@/src/lib/redis";
-import { parseTransactionWithGemini, TransactionData } from "@/src/lib/gemini";
+import { isDuplicateMessage, trackTokenUsage } from "@/src/lib/redis"; // Import trackTokenUsage
+import { parseTransactionWithGemini, GeminiResult } from "@/src/lib/gemini";
 import { appendTransactionToSheet } from "@/src/lib/sheets";
 import {
 	ratelimit,
@@ -57,34 +57,44 @@ export async function handleIncomingMessage(ctx: any) {
 				user.refresh_token &&
 				user.spreadsheet_id
 			);
-			let parsed: TransactionData;
+
+			// Menggunakan GeminiResult yang mengembalikan { data, usage }
+			let geminiResult: GeminiResult;
 
 			if (ctx.message.photo) {
-				parsed = await runWithChatAction(ctx, "upload_photo", async () => {
-					const file = await ctx.getFile();
-					const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-					const response = await fetchWithRetry(fileUrl);
-					const arrayBuffer = await response.arrayBuffer();
-					const base64Image = Buffer.from(arrayBuffer).toString("base64");
+				geminiResult = await runWithChatAction(
+					ctx,
+					"upload_photo",
+					async () => {
+						const file = await ctx.getFile();
+						const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+						const response = await fetchWithRetry(fileUrl);
+						const arrayBuffer = await response.arrayBuffer();
+						const base64Image = Buffer.from(arrayBuffer).toString("base64");
 
-					return await parseTransactionWithGemini({
-						inlineData: { mimeType: "image/jpeg", data: base64Image },
-					});
-				});
+						return await parseTransactionWithGemini({
+							inlineData: { mimeType: "image/jpeg", data: base64Image },
+						});
+					},
+				);
 			} else if (ctx.message.document) {
-				parsed = await runWithChatAction(ctx, "upload_document", async () => {
-					const doc = ctx.message.document;
-					const mimeType = doc.mime_type || "application/pdf";
-					const file = await ctx.getFile();
-					const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-					const response = await fetchWithRetry(fileUrl);
-					const arrayBuffer = await response.arrayBuffer();
-					const base64Data = Buffer.from(arrayBuffer).toString("base64");
+				geminiResult = await runWithChatAction(
+					ctx,
+					"upload_document",
+					async () => {
+						const doc = ctx.message.document;
+						const mimeType = doc.mime_type || "application/pdf";
+						const file = await ctx.getFile();
+						const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+						const response = await fetchWithRetry(fileUrl);
+						const arrayBuffer = await response.arrayBuffer();
+						const base64Data = Buffer.from(arrayBuffer).toString("base64");
 
-					return await parseTransactionWithGemini({
-						inlineData: { mimeType, data: base64Data },
-					});
-				});
+						return await parseTransactionWithGemini({
+							inlineData: { mimeType, data: base64Data },
+						});
+					},
+				);
 			} else if (ctx.message.text) {
 				const sanitizedText = sanitizeInputText(ctx.message.text);
 				if (containsPromptInjection(sanitizedText)) {
@@ -93,14 +103,22 @@ export async function handleIncomingMessage(ctx: any) {
 					);
 				}
 
-				parsed = await runWithChatAction(ctx, "typing", async () => {
+				geminiResult = await runWithChatAction(ctx, "typing", async () => {
 					return await parseTransactionWithGemini(sanitizedText);
 				});
 			} else {
 				return;
 			}
 
-			// PENANGANAN PENSIAPAN OUT-OF-TOPIC (OOT) BERDASARKAN STATUS AKUN
+			const parsed = geminiResult.data;
+			const usage = geminiResult.usage;
+
+			// CATAT TOKEN KE REDIS (BERLAKU UNTUK GUEST & REGISTERED USER)
+			if (usage && usage.totalTokens > 0) {
+				await trackTokenUsage(chatId, usage.totalTokens);
+			}
+
+			// PENANGANAN OUT-OF-TOPIC (OOT)
 			if (parsed.is_oot) {
 				if (isRegistered) {
 					const registeredOotMsg =

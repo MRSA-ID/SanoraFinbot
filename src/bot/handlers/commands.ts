@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/src/lib/supabaseAdmin";
 import { syncGmailTransactions } from "@/src/lib/gmail";
 import { appendTransactionToSheet } from "@/src/lib/sheets";
 import { InlineKeyboard } from "grammy";
+import { redis } from "@/src/lib/redis";
 import {
 	escapeHtml,
 	getRangeLabel,
@@ -166,4 +167,65 @@ export async function handleDeleteAccountCommand(ctx: any) {
 		`⚠️ <b>KONFIRMASI HAPUS DATA AKUN</b>\n\nApakah Anda yakin ingin menghapus seluruh data pendaftaran akun Anda dari SanoraFinbot?\n\n<i>Catatan: File Google Sheets yang sudah terbuat di Google Drive Anda TIDAK akan terhapus.</i>`,
 		{ parse_mode: "HTML", reply_markup: keyboard },
 	);
+}
+
+export async function handleAdminUsageCommand(ctx: any) {
+	const chatId = ctx.chat.id;
+	const adminId = process.env.ADMIN_TELEGRAM_ID;
+
+	// Proteksi: Hanya Admin yang diperbolehkan melihat
+	if (String(chatId) !== String(adminId)) {
+		return ctx.reply("⚠️ Perintah ini tidak dikenali.");
+	}
+
+	try {
+		const globalTotal = (await redis.get("usage:tokens:global_total")) || 0;
+
+		const { data: registeredUsers } = await supabaseAdmin
+			.from("users")
+			.select("telegram_chat_id, google_email");
+
+		const userEmailMap = new Map<number, string>();
+		if (registeredUsers) {
+			registeredUsers.forEach((u) => {
+				if (u.google_email) {
+					userEmailMap.set(Number(u.telegram_chat_id), u.google_email);
+				}
+			});
+		}
+
+		const keys = await redis.keys("usage:tokens:*");
+		const userKeys = keys.filter((k) => k !== "usage:tokens:global_total");
+
+		let reportText = `📊 <b>LAPORAN PENGGUNAAN TOKEN GEMINI (ADMIN)</b>\n\n`;
+		reportText += `🌐 <b>Total Penggunaan Global:</b> ${Number(globalTotal).toLocaleString("id-ID")} Tokens\n`;
+		reportText += `───────────────\n`;
+
+		if (userKeys.length === 0) {
+			reportText += `<i>Belum ada data penggunaan token.</i>`;
+		} else {
+			for (const key of userKeys) {
+				const targetChatId = Number(key.replace("usage:tokens:", ""));
+				const tokenCount = (await redis.get(key)) || 0;
+				const userEmail = userEmailMap.get(targetChatId);
+
+				const statusBadge = userEmail ? "🟢 Registered" : "⚪ Guest";
+				const identityText = userEmail
+					? `📧 <b>Email:</b> ${userEmail}`
+					: `👤 <b>Tipe:</b> Guest User`;
+
+				reportText += `${statusBadge}\n`;
+				reportText += `${identityText}\n`;
+				reportText += `🆔 <b>Chat ID:</b> <code>${targetChatId}</code>\n`;
+				reportText += `🔢 <b>Total Token:</b> ${Number(tokenCount).toLocaleString("id-ID")} Tokens\n\n`;
+			}
+		}
+
+		await ctx.reply(reportText, { parse_mode: "HTML" });
+	} catch (err: any) {
+		console.error("Admin Usage Error:", err);
+		await ctx.reply(
+			"⚠️ Terjadi kesalahan saat menarik laporan penggunaan token.",
+		);
+	}
 }

@@ -5,6 +5,7 @@ import {
 	handleSettingsCommand,
 	handleDisconnectCommand,
 	handleDeleteAccountCommand,
+	handleAdminUsageCommand, // Import handler admin
 } from "./handlers/commands";
 import { handleCallbackQuery } from "./handlers/callbacks";
 import { handleIncomingMessage } from "./handlers/messages";
@@ -17,6 +18,9 @@ bot.command("sync", triggerManualSync);
 bot.command("settings", handleSettingsCommand);
 bot.command("disconnect", handleDisconnectCommand);
 bot.command("deleteaccount", handleDeleteAccountCommand);
+
+// Command Khusus Admin
+bot.command("adminusage", handleAdminUsageCommand);
 
 // Register Callback Queries (Buttons)
 bot.on("callback_query:data", handleCallbackQuery);

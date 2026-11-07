@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 		const { data: users, error } = await supabaseAdmin
 			.from("users")
 			.select(
-				"telegram_chat_id, refresh_token, spreadsheet_id, google_email, gmail_sync_enabled, sync_range_days",
+				"telegram_chat_id, refresh_token, spreadsheet_id, google_email, gmail_sync_enabled",
 			)
 			.eq("gmail_sync_enabled", true);
 
@@ -38,11 +38,12 @@ export async function GET(request: Request) {
 		for (const user of users) {
 			if (!user.refresh_token || !user.spreadsheet_id) continue;
 
+			// Cron Otomatis HANYA memindai 1 hari terakhir (hari ini)
 			const transactions = await syncGmailTransactions(
 				user.refresh_token,
 				user.telegram_chat_id,
 				"GoPay",
-				user.sync_range_days || 7,
+				1, // Hardcode 1 hari khusus untuk cron-jobs
 			);
 
 			for (const tx of transactions) {

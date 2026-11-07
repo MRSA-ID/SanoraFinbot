@@ -9,7 +9,7 @@ import {
 } from "@/src/lib/security";
 import { runWithChatAction, withSessionLock } from "../helpers/chatActions";
 import { formatTransactionNotification } from "../helpers/formatters";
-import { handleUserError, AppError } from "../helpers/errors"; // Import error helper
+import { handleUserError, AppError } from "../helpers/errors";
 
 async function fetchWithRetry(
 	url: string,
@@ -100,11 +100,25 @@ export async function handleIncomingMessage(ctx: any) {
 				return;
 			}
 
+			// PENANGANAN PENSIAPAN OUT-OF-TOPIC (OOT) BERDASARKAN STATUS AKUN
 			if (parsed.is_oot) {
-				return ctx.reply(
-					parsed.oot_response ||
-						"Maaf, saya hanya dapat membantu pencatatan dan analisis keuangan Anda.",
-				);
+				if (isRegistered) {
+					const registeredOotMsg =
+						`Halo! Saya adalah Asisten Keuangan AI Anda. 👋\n\n` +
+						`🟢 <b>Akun Google Anda terhubung!</b> Sistem akan otomatis memindai email transaksi Gmail Anda setiap 1 jam sekali.\n\n` +
+						`💡 Anda juga bisa langsung mengirimkan <b>teks catatan transaksi</b>, <b>foto struk</b>, atau <b>file mutasi</b> di sini kapan saja untuk dicatat otomatis ke Google Sheets.`;
+
+					return ctx.reply(registeredOotMsg, { parse_mode: "HTML" });
+				} else {
+					const authLink = `${process.env.APP_URL}/api/auth/google?chat_id=${chatId}`;
+					const guestOotMsg =
+						`Halo! Saya adalah Asisten Keuangan AI Anda. 👋\n\n` +
+						`💡 Anda saat ini berada dalam <b>Mode Guest</b>. Anda dapat mencoba mengirimkan <b>teks catatan transaksi</b>, <b>foto struk</b>, atau <b>file mutasi</b>.\n\n` +
+						`🔗 Hubungkan akun Google Anda untuk mengaktifkan pemindaian otomatis Gmail (tiap jam) dan pencatatan otomatis ke Google Sheets:\n` +
+						`<a href="${authLink}">👉 Hubungkan Akun Google</a>`;
+
+					return ctx.reply(guestOotMsg, { parse_mode: "HTML" });
+				}
 			}
 
 			if (!parsed.is_transaction || parsed.nominal === 0) {
@@ -140,7 +154,6 @@ export async function handleIncomingMessage(ctx: any) {
 				return ctx.reply(guestMessage, { parse_mode: "HTML" });
 			}
 		} catch (error) {
-			// PEMILAHAN ERROR DI SINI:
 			const userFriendlyMessage = handleUserError(error);
 			await ctx.reply(userFriendlyMessage);
 		}

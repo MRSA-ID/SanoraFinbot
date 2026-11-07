@@ -81,7 +81,7 @@ Contoh Case Out-Of-Topic:
 {
   "is_transaction": false,
   "is_oot": true,
-  "oot_response": "Maaf, saya adalah asisten keuangan pribadi Anda.",
+  "oot_response": "Halo! Saya adalah Asisten Keuangan AI Anda. Silakan kirimkan teks catatan transaksi, foto struk belanja, atau dokumen mutasi Anda.",
   "tanggal": "",
   "merchant": "",
   "nominal": 0,

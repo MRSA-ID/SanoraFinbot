@@ -20,6 +20,15 @@ export const TransactionSchema = z.object({
 
 export type TransactionData = z.infer<typeof TransactionSchema>;
 
+export interface GeminiResult {
+	data: TransactionData;
+	usage: {
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+	};
+}
+
 const SYSTEM_INSTRUCTION = `
 Anda adalah Financial Record Assistant & AI Data Extractor khusus pasar Indonesia.
 Tugas Anda adalah merapikan isi email/bukti transaksi, membaca nominal, nama toko/merchant, tanggal, nomor referensi, menentukan jenis transaksi (pengeluaran/pemasukan), kategori, serta menentukan sumber dana secara mandiri.
@@ -96,7 +105,7 @@ async function generateWithTimeout(
 	model: any,
 	contents: any,
 	timeoutMs = 4000,
-): Promise<string> {
+): Promise<{ text: string; usage: any }> {
 	return new Promise(async (resolve, reject) => {
 		const timer = setTimeout(() => {
 			reject(new Error("Timeout Exceeded"));
@@ -105,7 +114,10 @@ async function generateWithTimeout(
 		try {
 			const result = await model.generateContent(contents);
 			clearTimeout(timer);
-			resolve(result.response.text());
+			resolve({
+				text: result.response.text(),
+				usage: result.response.usageMetadata,
+			});
 		} catch (err) {
 			clearTimeout(timer);
 			reject(err);
@@ -115,7 +127,7 @@ async function generateWithTimeout(
 
 export async function parseTransactionWithGemini(
 	input: string | { inlineData: { mimeType: string; data: string } },
-): Promise<TransactionData> {
+): Promise<GeminiResult> {
 	// KANDIDAT MODEL TETAP SAMA PERSIS TANPA DIUBAH
 	const candidateModels = [
 		"gemini-3.1-flash-lite",
@@ -127,6 +139,7 @@ export async function parseTransactionWithGemini(
 	];
 
 	let responseText = "";
+	let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
 	let contents;
 	if (typeof input === "string") {
@@ -150,12 +163,20 @@ export async function parseTransactionWithGemini(
 				generationConfig: {
 					responseMimeType: "application/json",
 					temperature: 0.1,
+					maxOutputTokens: 300, // Pembatasan Output Token untuk Hemat Biaya & Cegah Hallucination
 				},
 			});
 
-			const text = await generateWithTimeout(model, contents, 4000);
-			if (text) {
-				responseText = text;
+			const res = await generateWithTimeout(model, contents, 4000);
+			if (res.text) {
+				responseText = res.text;
+				if (res.usage) {
+					tokenUsage = {
+						promptTokens: res.usage.promptTokenCount || 0,
+						completionTokens: res.usage.candidatesTokenCount || 0,
+						totalTokens: res.usage.totalTokenCount || 0,
+					};
+				}
 				break;
 			}
 		} catch (err: any) {
@@ -195,7 +216,10 @@ export async function parseTransactionWithGemini(
 			}
 		}
 
-		return data;
+		return {
+			data,
+			usage: tokenUsage,
+		};
 	} catch (error) {
 		if (error instanceof AppError) throw error;
 		console.error("Gemini Extraction Error:", error);

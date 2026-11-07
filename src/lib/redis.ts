@@ -79,3 +79,15 @@ export async function releaseChatLock(chatId: number): Promise<void> {
 	const key = `chat_lock:${chatId}`;
 	await redis.del(key);
 }
+
+/**
+ * 6. Pencatatan Token Gemini AI per User & Global
+ */
+export async function trackTokenUsage(
+	chatId: number,
+	tokens: number,
+): Promise<void> {
+	if (!tokens || tokens <= 0) return;
+	await redis.incrby(`usage:tokens:${chatId}`, tokens);
+	await redis.incrby(`usage:tokens:global_total`, tokens);
+}
